@@ -14,6 +14,7 @@ namespace PicGrab
         private int request;
         private bool loading;
         private string pendingPath;
+        private string currentPath;
         private double zoom = 1.0;
         private PointF offset;
         private Point lastMouse;
@@ -33,6 +34,7 @@ namespace PicGrab
         {
             request++;
             pendingPath = null;
+            currentPath = null;
             ReplaceImage(null);
             message = "写真をクリックするとプレビューを表示します";
             Invalidate();
@@ -40,6 +42,8 @@ namespace PicGrab
 
         public void LoadPhoto(string path)
         {
+            if (String.Equals(currentPath, path, StringComparison.OrdinalIgnoreCase)) return;
+            currentPath = path;
             request++;
             pendingPath = path;
             ReplaceImage(null);
@@ -76,6 +80,7 @@ namespace PicGrab
                             return;
                         }
                         ReplaceImage(loaded);
+                        if (loaded == null) currentPath = null;
                         message = loaded == null ? "プレビューを読み込めませんでした" : null;
                         Invalidate();
                         if (error != null && LoadError != null)

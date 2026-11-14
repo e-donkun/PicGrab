@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -22,7 +21,7 @@ namespace PicGrab
     {
         private readonly PhotoGallery gallery;
         private readonly PhotoPreview preview;
-        private readonly ToolStripLabel folderLabel;
+        private readonly ToolStripTextBox folderAddress;
         private readonly ToolStripStatusLabel status;
 
         public MainForm()
@@ -35,9 +34,21 @@ namespace PicGrab
             var toolbar = new ToolStrip();
             var openButton = new ToolStripButton("フォルダーを選択");
             openButton.Click += OpenFolder;
-            folderLabel = new ToolStripLabel("フォルダーを選択してください");
+            folderAddress = new ToolStripTextBox();
+            folderAddress.AutoSize = false;
+            folderAddress.ToolTipText = "フォルダーのパスを入力して Enter";
+            folderAddress.KeyDown += AddressKeyDown;
+            var selectionMenu = new ToolStripDropDownButton("選択");
+            selectionMenu.DropDownItems.Add("すべて選択", null, delegate { gallery.SelectAllPhotos(); });
+            selectionMenu.DropDownItems.Add("選択の切り替え", null, delegate { gallery.InvertSelection(); });
             toolbar.Items.Add(openButton);
-            toolbar.Items.Add(folderLabel);
+            toolbar.Items.Add(folderAddress);
+            toolbar.Items.Add(selectionMenu);
+            toolbar.SizeChanged += delegate
+            {
+                folderAddress.Width = Math.Max(100, toolbar.ClientSize.Width - openButton.Width
+                    - selectionMenu.Width - 40);
+            };
 
             var statusBar = new StatusStrip();
             status = new ToolStripStatusLabel();
@@ -72,27 +83,44 @@ namespace PicGrab
             {
                 dialog.Description = "JPEG 写真のフォルダーを選択してください";
                 dialog.ShowNewFolderButton = false;
+                if (Directory.Exists(folderAddress.Text))
+                    dialog.SelectedPath = folderAddress.Text;
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                LoadFolder(dialog.SelectedPath);
+            }
+        }
 
-                try
-                {
-                    string[] paths = Directory.GetFiles(dialog.SelectedPath)
-                        .Where(p => String.Equals(Path.GetExtension(p), ".jpg", StringComparison.OrdinalIgnoreCase)
-                                 || String.Equals(Path.GetExtension(p), ".jpeg", StringComparison.OrdinalIgnoreCase))
-                        .OrderBy(p => Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
-                        .ToArray();
-                    gallery.SetPhotos(paths);
-                    preview.ClearPhoto();
-                    folderLabel.Text = dialog.SelectedPath;
-                    UpdateStatus();
-                }
-                catch (Exception ex)
-                {
-                    if (!(ex is IOException) && !(ex is UnauthorizedAccessException)
-                        && !(ex is System.Security.SecurityException))
-                        throw;
-                    ShowError("フォルダーを読み込めませんでした。\n" + ex.Message);
-                }
+        private void AddressKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            LoadFolder(folderAddress.Text);
+        }
+
+        private void LoadFolder(string path)
+        {
+            try
+            {
+                string fullPath = Path.GetFullPath(path.Trim());
+                string[] paths = Directory.GetFiles(fullPath)
+                    .Where(p => String.Equals(Path.GetExtension(p), ".jpg", StringComparison.OrdinalIgnoreCase)
+                             || String.Equals(Path.GetExtension(p), ".jpeg", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(p => Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
+                    .ToArray();
+                gallery.SetPhotos(paths);
+                preview.ClearPhoto();
+                folderAddress.Text = fullPath;
+                gallery.Focus();
+                UpdateStatus();
+            }
+            catch (Exception ex)
+            {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException)
+                    && !(ex is System.Security.SecurityException) && !(ex is ArgumentException)
+                    && !(ex is NotSupportedException))
+                    throw;
+                ShowError("フォルダーを読み込めませんでした。\n" + ex.Message);
             }
         }
 

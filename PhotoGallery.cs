@@ -54,6 +54,20 @@ namespace PicGrab
             if (SelectionChanged != null) SelectionChanged();
         }
 
+        public void SelectAllPhotos()
+        {
+            for (int i = 0; i < selected.Length; i++) selected[i] = true;
+            Invalidate();
+            if (SelectionChanged != null) SelectionChanged();
+        }
+
+        public void InvertSelection()
+        {
+            for (int i = 0; i < selected.Length; i++) selected[i] = !selected[i];
+            Invalidate();
+            if (SelectionChanged != null) SelectionChanged();
+        }
+
         private int Columns
         {
             get { return Math.Max(1, ClientSize.Width / TileWidth); }
@@ -206,6 +220,64 @@ namespace PicGrab
             cacheOrder.Clear();
         }
 
+        protected override bool IsInputKey(Keys keyData)
+        {
+            Keys key = keyData & Keys.KeyCode;
+            if (key == Keys.Left || key == Keys.Right || key == Keys.Up || key == Keys.Down)
+                return true;
+            return base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (paths.Length == 0 || e.Modifiers != Keys.None) return;
+            if (e.KeyCode == Keys.Space)
+            {
+                if (current >= 0)
+                {
+                    selected[current] = !selected[current];
+                    if (SelectionChanged != null) SelectionChanged();
+                    Invalidate();
+                }
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+            if (e.KeyCode != Keys.Left && e.KeyCode != Keys.Right
+                && e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
+
+            int next = current;
+            if (current < 0) next = 0;
+            else if (e.KeyCode == Keys.Left) next = Math.Max(0, current - 1);
+            else if (e.KeyCode == Keys.Right) next = Math.Min(paths.Length - 1, current + 1);
+            else if (e.KeyCode == Keys.Up && current >= Columns) next = current - Columns;
+            else if (e.KeyCode == Keys.Down && current / Columns < (paths.Length - 1) / Columns)
+                next = Math.Min(paths.Length - 1, current + Columns);
+
+            if (next != current)
+            {
+                current = next;
+                EnsureCurrentVisible();
+                if (PhotoClicked != null) PhotoClicked(paths[current]);
+                Invalidate();
+            }
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        private void EnsureCurrentVisible()
+        {
+            Rectangle tile = TileBounds(current);
+            int x = -AutoScrollPosition.X;
+            int y = -AutoScrollPosition.Y;
+            if (tile.Left < 0) x += tile.Left;
+            else if (tile.Right > ClientSize.Width) x += tile.Right - ClientSize.Width;
+            if (tile.Top < 0) y += tile.Top;
+            else if (tile.Bottom > ClientSize.Height) y += tile.Bottom - ClientSize.Height;
+            AutoScrollPosition = new Point(Math.Max(0, x), Math.Max(0, y));
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
@@ -215,6 +287,7 @@ namespace PicGrab
             int column = x / TileWidth;
             int index = (y / TileHeight) * Columns + column;
             if (x < 0 || y < 0 || column >= Columns || index >= paths.Length) return;
+            Focus();
             current = index;
             if (CheckBounds(TileBounds(index)).Contains(e.Location))
             {
